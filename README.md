@@ -1,4 +1,4 @@
-orthancOpenGL
+OrthancOpenGL
 =============
 
-An Orthanc mad on OpenGL as Computer Graphics Final Project
+An Orthanc Tower made on OpenGL as Computer Graphics Final Project
