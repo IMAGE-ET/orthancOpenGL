@@ -60,8 +60,8 @@ void drawScene(void)
 	{
 		// Set the camera
 		gluLookAt(	20.0f, 6.0f, -8.0f, 	// eyeX, eyeY, eyeZ
-					0.0f, 0.0f,  0.0f,		// centerX, centerY, centerZ
-					0.0f, 1.0f,  0.0f);		// upX, upY, upZ
+				0.0f, 0.0f,  0.0f,	// centerX, centerY, centerZ
+				0.0f, 1.0f,  0.0f);	// upX, upY, upZ
 	}
 	else // ORTHO
 	{
@@ -78,48 +78,49 @@ void drawScene(void)
 	glPushMatrix();	
 
 		// Make sure it begins at the origin.
-		glRotatef(rotX,1.0,0.0,0.0);				// Rotate on x
-		glRotatef(rotY,0.0,1.0,0.0);				// Rotate on y
-		glRotatef(rotZ,0.0,0.0,1.0);				// Rotate on z
-		glTranslatef(X, Y, Z);						// Translates the screen left or right,
-													// up or down or zoom in zoom out
+		glRotatef(rotX,1.0,0.0,0.0);		// Rotate on x
+		glRotatef(rotY,0.0,1.0,0.0);		// Rotate on y
+		glRotatef(rotZ,0.0,0.0,1.0);		// Rotate on z
+		glTranslatef(X, Y, Z);			// Translates the screen left or right,
+							// up or down or zoom in zoom out
 
 		/*------------------------------------------------------------*/
-		// Draw the positive side of the lines x,y,z
+		// Draw the lines x,y,z
 
 		if (showAxis)
 		{
+			// Draw the positive side of the lines x,y,z
 			glBegin(GL_LINES);
-				glColor3f (0.0, 1.0, 0.0);			// Green for x axis
+				glColor3f (0.0, 1.0, 0.0);	// Green for x axis
 				glVertex3f(0,0,0);
 				glVertex3f(100,0,0);
 
-				glColor3f(1.0,0.0,0.0);				// Red for y axis
+				glColor3f(1.0,0.0,0.0);		// Red for y axis
 				glVertex3f(0,0,0);
 				glVertex3f(0,100,0);
 				
-				glColor3f(0.0,0.0,1.0);				// Blue for z axis
+				glColor3f(0.0,0.0,1.0);		// Blue for z axis
 				glVertex3f(0,0,0);	
 				glVertex3f(0,0,100);
 			glEnd();
 			
 			// Dotted lines for the negative sides of x,y,z
-			glEnable(GL_LINE_STIPPLE);				// Enable line stipple to use a 
-													// dotted pattern for the lines
-			glLineStipple(1, 0x0101);				// Dotted stipple pattern for the lines
+			glEnable(GL_LINE_STIPPLE);		// Enable line stipple to use a 
+								// dotted pattern for the lines
+			glLineStipple(1, 0x0101);		// Dotted stipple pattern for the lines
 			glBegin(GL_LINES);				
-				glColor3f (0.0, 1.0, 0.0);			// Green for x axis
+				glColor3f (0.0, 1.0, 0.0);	// Green for x axis
 				glVertex3f(-100,0,0);
 				glVertex3f(0,0,0);
-				glColor3f(1.0,0.0,0.0);				// Red for y axis
+				glColor3f(1.0,0.0,0.0);		// Red for y axis
 				glVertex3f(0,0,0);
 				glVertex3f(0,-100,0);
-				glColor3f(0.0,0.0,1.0);				// Blue for z axis
+				glColor3f(0.0,0.0,1.0);		// Blue for z axis
 				glVertex3f(0,0,0);
 				glVertex3f(0,0,-100);
 			glEnd();
 
-			glDisable(GL_LINE_STIPPLE);				// Disable the line stipple
+			glDisable(GL_LINE_STIPPLE);		// Disable the line stipple
 		}
 		/*------------------------------------------------------------------*/
 
@@ -148,8 +149,8 @@ void drawScene(void)
 void setup(void) 
 {
    glClearColor(0.0, 0.0, 0.0, 0.0);		// Sets the background color
-   glShadeModel(GL_FLAT);					// Set the Shading Model
-   glEnable(GL_LINE_SMOOTH);				// 
+   glShadeModel(GL_FLAT);			// Set the Shading Model
+   glEnable(GL_LINE_SMOOTH);			// 
    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);	// Set Line Antialiasing
 }
 
@@ -184,22 +185,22 @@ void keyInput(unsigned char key, int x, int y)
    switch(key) 
    {
 		// x,X,y,Y,s,S uses the glRotatef() function
-		case 'x':				// Rotates screen on x axis 
+		case 'x':			// Rotates screen on x axis 
 			rotX -= 0.5f;
 		break;
-		case 'X':				// Opposite way 
+		case 'X':			// Opposite way 
 			rotX += 0.5f;
 		break;
-		case 'y':				// Rotates screen on y axis
+		case 'y':			// Rotates screen on y axis
 			rotY -= 0.5f;
 		break;
-		case 'Y':				// Opposite way
+		case 'Y':			// Opposite way
 			rotY += 0.5f;	
 		break;	
-		case 's':				// Rotates screen on z axis
+		case 's':			// Rotates screen on z axis
 			rotZ -= 0.5f;
 		break;
-		case 'S':				// Opposite way
+		case 'S':			// Opposite way
 			rotZ += 0.5f;
 		break;
 
@@ -288,13 +289,13 @@ void specialKey(int key, int x, int y) {
 		case GLUT_KEY_LEFT :    // Rotate on x axis
 			X -= 0.1f;
           break;
-        case GLUT_KEY_RIGHT :	// Rotate on x axis (opposite)
+        case GLUT_KEY_RIGHT :		// Rotate on x axis (opposite)
 			X +=  0.1f;
           break;
         case GLUT_KEY_UP :		// Rotate on y axis 
 			Y += 0.1f;
           break;
-        case GLUT_KEY_DOWN :	// Rotate on y axis (opposite)
+        case GLUT_KEY_DOWN :		// Rotate on y axis (opposite)
 			Y -= 0.1f;
           break;	
 		case GLUT_KEY_PAGE_UP:  // Roatae on z axis
@@ -318,15 +319,15 @@ int main(int argc, char **argv)
 
    	// Window creation and settings
    	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGBA | GLUT_DEPTH);
-   												// the GLUT_DEPTH causes
-   												// the oclusion of objects
-   												// when over each other
-   	glutInitWindowSize(1000, 1000); // redering window size
+   							// the GLUT_DEPTH causes
+   							// the oclusion of objects
+   							// when over each other
+   	glutInitWindowSize(1000, 1000); 	// redering window size
    	glutInitWindowPosition(100, 100); 
    	glutCreateWindow("Final Project - Orthanc");
 
 	//glEnable(GL_LIGHTING);
-    //	glEnable(GL_LIGHT0);
+    	//glEnable(GL_LIGHT0);
 
    	// Cals for the created fucntions
    	glutDisplayFunc(drawScene); 
