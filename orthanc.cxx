@@ -15,9 +15,14 @@
 #include <GL/glext.h>
 
 // Other libraries
+#include <stdio.h>
+#include <iostream>
 #include <math.h> // needed for sin() and cos()
 
+// Used for loading textures
 #include "imageloader.h"
+#include <png.h>
+
 
 // Global Variables
 GLfloat X = 0.0f;			// Translate screen to x direction (left or right)
@@ -28,7 +33,7 @@ GLfloat rotY = 0.0f;		// Rotate screen on y axis
 GLfloat rotZ = 0.0f;		// Rotate screen on z axis
 
 // Camera position
-float x = 0.0, y = 0.0, z = 0.0f;
+float x = 0.0, y = 0.0, z = -4.0f;
 float deltaMove = 0.0; // initially camera doesn't move
 float strafe = 0.0;
 
@@ -42,18 +47,29 @@ int isDragging = 0; // true when dragging
 int xDragStart = 0; // records the x-coordinate when dragging starts
 int zDragStart = 0;
 
-static float zoom = 0.0; // Acumulated zoom factor
-static float orthoSize = 2;
+float zoom = 0.0; // Acumulated zoom factor
+float orthoSize = 2;
 
-// vector to hold textures of skybox
-GLfloat _textureId[6];
+// For building the walls of Isengard
+float isengardRadius = 26;
+float isengardAngle = 0;
+
+// vectors to hold textures
+GLfloat _textureId[6]; //skybox
+GLubyte *_textureShadow;
 
 int width, wh;
 int height, hw;
 
+// Flags for collision detection
+// bool collisionX = false;
+// bool collisionZ = false;
+
 // Flags for visualization
-bool wireFrame = false;			// Flag used for changing the glPolygonMode 
-bool showAxis = true;			// Flag used for showing or not the axis lines
+bool wireFrame  = false;		// Flag used for changing the glPolygonMode 
+bool showAxis   = true;			// Flag used for showing or not the axis lines
+bool enableFog  = false;		// Flag used for enable the fog (starts deactivated)
+bool enableSnow = false;		// Flag used for enable the snow (starts deactivated)
 
 // STRUCTS------------------------------------------------------------------------------//
 typedef struct _pilasterStruct
@@ -76,19 +92,138 @@ typedef struct _pilasterStruct
 // Camera movement
 void update(void)
 {
-	if (deltaMove) { // update camera position
-		x += deltaMove * lx * 0.1;
-		z += deltaMove * lz * 0.1;
+	if (deltaMove) 
+	{ 				// update camera position
+		x += deltaMove * lx * 0.4;
+		z += deltaMove * lz * 0.4;
 	}
-	if (strafe) { // update camera position
-		x += strafe * hx * 0.1;
-		z += strafe * hz * 0.1;
+	if (strafe) 
+		{ 			// update camera position
+		x += strafe * hx * 0.4;
+		z += strafe * hz * 0.4;
 	}
+
 	glutPostRedisplay(); // redisplay everything
 }
 
-//------
-// load textures
+// Load png with trasnparency by libpng
+bool loadPngImage(char *name, int &outWidth, int &outHeight, bool &outHasAlpha, GLubyte **outData) {
+    png_structp png_ptr;
+    png_infop info_ptr;
+    unsigned int sig_read = 0;
+    int color_type, interlace_type;
+    FILE *fp;
+ 
+    if ((fp = fopen(name, "rb")) == NULL)
+        return false;
+ 
+    /* Create and initialize the png_struct
+     * with the desired error handler
+     * functions.  If you want to use the
+     * default stderr and longjump method,
+     * you can supply NULL for the last
+     * three parameters.  We also supply the
+     * the compiler header file version, so
+     * that we know if the application
+     * was compiled with a compatible version
+     * of the library.  REQUIRED
+     */
+    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
+                                     NULL, NULL, NULL);
+ 
+    if (png_ptr == NULL) {
+        fclose(fp);
+        return false;
+    }
+ 
+    /* Allocate/initialize the memory
+     * for image information.  REQUIRED. */
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL) {
+        fclose(fp);
+        png_destroy_read_struct(&png_ptr, NULL, NULL);
+        return false;
+    }
+ 
+    /* Set error handling if you are
+     * using the setjmp/longjmp method
+     * (this is the normal method of
+     * doing things with libpng).
+     * REQUIRED unless you  set up
+     * your own error handlers in
+     * the png_create_read_struct()
+     * earlier.
+     */
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        /* Free all of the memory associated
+         * with the png_ptr and info_ptr */
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        fclose(fp);
+        /* If we get here, we had a
+         * problem reading the file */
+        return false;
+    }
+ 
+    /* Set up the output control if
+     * you are using standard C streams */
+    png_init_io(png_ptr, fp);
+ 
+    /* If we have already
+     * read some of the signature */
+    png_set_sig_bytes(png_ptr, sig_read);
+ 
+    /*
+     * If you have enough memory to read
+     * in the entire image at once, and
+     * you need to specify only
+     * transforms that can be controlled
+     * with one of the PNG_TRANSFORM_*
+     * bits (this presently excludes
+     * dithering, filling, setting
+     * background, and doing gamma
+     * adjustment), then you can read the
+     * entire image (including pixels)
+     * into the info structure with this
+     * call
+     *
+     * PNG_TRANSFORM_STRIP_16 |
+     * PNG_TRANSFORM_PACKING  forces 8 bit
+     * PNG_TRANSFORM_EXPAND forces to
+     *  expand a palette into RGB
+     */
+    png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_STRIP_16 | PNG_TRANSFORM_PACKING | PNG_TRANSFORM_EXPAND, NULL);
+ 
+    png_uint_32 width, height;
+    int bit_depth;
+    png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type,
+                 &interlace_type, NULL, NULL);
+    outWidth = width;
+    outHeight = height;
+ 
+    unsigned int row_bytes = png_get_rowbytes(png_ptr, info_ptr);
+    *outData = (unsigned char*) malloc(row_bytes * outHeight);
+ 
+    png_bytepp row_pointers = png_get_rows(png_ptr, info_ptr);
+ 
+    for (int i = 0; i < outHeight; i++) {
+        // note that png is ordered top to
+        // bottom, but OpenGL expect it bottom to top
+        // so the order or swapped
+        memcpy(*outData+(row_bytes * (outHeight-1-i)), row_pointers[i], row_bytes);
+    }
+ 
+    /* Clean up after the read,
+     * and free any memory allocated */
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+ 
+    /* Close the file */
+    fclose(fp);
+ 
+    /* That's it */
+    return true;
+}
+
+// Load textures by imageloader (bmp, 24 bits)
 GLuint loadTexture(Image* image) 
 {
 	GLuint textureId;
@@ -107,12 +242,9 @@ GLuint loadTexture(Image* image)
 
 	return textureId;
 }
-//----
 
-
-//--- creating skybox function
+// Creating skybox function
 float boxSize = 50.0;
-
 void createSkybox()
 {
 	glPushMatrix();
@@ -200,17 +332,185 @@ void createSkybox()
 	glPopMatrix();
 }
 
-// Draw the Ground - 200x200 square colored green
+// -- Particles System
+const int ParticleCount = 8000;
+
+typedef struct
+{
+	double Xpos;
+	double Ypos;
+	double Zpos;
+	double Xmov;
+	double Zmov;
+	double Red;
+	double Green;
+	double Blue;
+	double Direction;
+	double Acceleration;
+	double Deceleration;
+	double Scalez;
+	bool Visible;
+}PARTICLES;
+
+PARTICLES Particle[ParticleCount];
+
+void glCreateParticles (void)
+{
+	int i;
+	for (i = 1; i < ParticleCount; i++)
+	{
+		Particle[i].Xpos = 0;
+		Particle[i].Ypos = boxSize - 1;
+		Particle[i].Zpos = 0;
+		Particle[i].Xmov = (((((((2 - 1 + 1) * rand()%((int)boxSize*4)) + 1) - 1 + 1) * rand()%((int)boxSize*4))) + 1) * 0.005 - (((((((((2 - 1 + 1) * rand()%((int)boxSize*4))) + 1) - 1 + 1) * rand()%((int)boxSize*4))) + 1) * 0.005);
+		Particle[i].Zmov = (((((((((2 - 1 + 1) * rand()%((int)boxSize*4))) + 1) - 1 + 1) * rand()%((int)boxSize*4))) + 1) * 0.005) - (((((((((2 - 1 + 1) * rand()%((int)boxSize*4))) + 1) - 1 + 1) * rand()%((int)boxSize*4))) + 1) * 0.005);
+		Particle[i].Red = 1;
+		Particle[i].Green = 1;
+		Particle[i].Blue = 1;
+		Particle[i].Scalez = 0.15;
+		Particle[i].Direction = 0;
+		Particle[i].Acceleration = -((((((8 - 5 + 2) * rand()%11) + 5) - 1 + 1) * rand()%11) + 1) * 0.03;
+		Particle[i].Deceleration = 0.0025;
+	}
+}
+
+void glUpdateParticles (void)
+{
+	int i;
+	for (i = 1; i < ParticleCount; i++)
+	{
+		glColor3f (Particle[i].Red, Particle[i].Green, Particle[i].Blue);
+
+		Particle[i].Ypos = Particle[i].Ypos + Particle[i].Acceleration -  Particle[i].Deceleration;
+		Particle[i].Deceleration = Particle[i].Deceleration + 0.0025;
+		Particle[i].Xpos = Particle[i].Xpos + Particle[i].Xmov;
+		Particle[i].Zpos = Particle[i].Zpos + Particle[i].Zmov;
+		Particle[i].Direction = Particle[i].Direction + ((((((int)(0.5 - 0.1 + 0.1) * rand()%((int)boxSize*4)) + 1) - 1 + 1) * rand()%((int)boxSize*4)) + 1);
+
+		if (Particle[i].Ypos < -boxSize || Particle[i].Ypos > boxSize || Particle[i].Xpos > boxSize || Particle[i].Xpos < -boxSize || Particle[i].Zpos > boxSize || Particle[i].Zpos < -boxSize)
+		{
+			Particle[i].Xpos = 0;
+			Particle[i].Ypos = boxSize-1;
+			Particle[i].Zpos = 0;
+			Particle[i].Red = 1;
+			Particle[i].Green = 1;
+			Particle[i].Blue = 1;
+			Particle[i].Direction = 0;
+			Particle[i].Acceleration = ((((((8 - 5 + 2) * rand()%11) + 5) - 1 + 1) * rand()%11) + 1) * 0.02;
+			Particle[i].Deceleration = 0.0025;
+		}
+	}
+}
+
+void glDrawParticles (void)
+{
+	int i;
+
+	for (i = 1; i < ParticleCount; i++)
+	{
+		glPushMatrix();
+
+			glTranslatef(Particle[i].Xpos, Particle[i].Ypos, Particle[i].Zpos);
+			glRotatef(Particle[i].Direction - 90, 0, 0, 1);
+	   
+			glScalef (Particle[i].Scalez, Particle[i].Scalez, Particle[i].Scalez);
+
+			glBegin(GL_QUADS);
+				glVertex3f(-0.1, -0.1, 0);
+				glVertex3f (0.1, -0.1, 0);
+				glVertex3f (0.1, 0.1, 0);
+				glVertex3f (-0.1, 0.1, 0);
+			glEnd();
+
+		glPopMatrix();
+	}
+}
+
+// ---- End of Particles
+
+// Draw the Ground
 void drawGround()
 {
 	glColor3f(0.1, 0.1, 0.1);
 
-	glBegin(GL_QUADS);
-		glVertex3f(-50.0, 0.0, -50.0);
-		glVertex3f(-50.0, 0.0, 50.0);
-		glVertex3f(50.0, 0.0, 50.0);
-		glVertex3f(50.0, 0.0, -50.0);
-	glEnd();
+	// Draw the foor, with a mesh
+	glPushMatrix();
+		
+		glTranslatef(-boxSize, 0, -boxSize);				
+
+		glBegin(GL_TRIANGLES);
+
+			int x, z;
+			
+			for (x = 0; x < boxSize*2; x += 2)
+			{
+				for (z = 0; z < boxSize*2; z += 2)
+				{
+					glVertex3f(x,0,z);
+					glVertex3f(x+2,0,z+2);
+					glVertex3f(x,0,z+2);
+				}
+
+			}
+
+			for (x = 0; x < boxSize*2; x += 2)
+			{
+				for (z = 0; z < boxSize*2; z += 2)
+				{
+					glVertex3f(x+2,0,z+2);
+					glVertex3f(x,0,z);
+					glVertex3f(x+2,0,z);
+				}
+
+			}
+
+		glEnd();
+
+	glPopMatrix();
+
+	glPushMatrix(); // TOWER SHADOW PROJECTION
+
+		glDisable(GL_LIGHTING);
+		// glDisable(GL_DEPTH_TEST);
+
+		glEnable(GL_BLEND);
+    	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		
+		glTexImage2D(GL_TEXTURE_2D, 0, 4, 1151,
+                 1151, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 _textureShadow);
+   		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_BLEND);
+		glEnable(GL_TEXTURE_2D);
+
+		glColor3f(1, 1, 1);
+
+		glRotatef(45, 0, 1, 0);
+		glTranslatef( 0.55, 0.0, -5.15);
+
+		glBegin(GL_QUADS);
+			glTexCoord2f(0, 0); 
+			glVertex3f(0, 0.001, 0);
+			glTexCoord2f(1, 0); 
+			glVertex3f(0, 0.001, 10.1);
+			glTexCoord2f(1, 1); 
+			glVertex3f( -10.1, 0.001, 10.1);
+			glTexCoord2f(0, 1); 
+			glVertex3f( -10.1, 0.001, 0);
+		glEnd();	
+
+		glEnable(GL_LIGHTING);
+		glDisable(GL_BLEND);
+		// glEnable(GL_DEPTH_TEST);
+		glDisable(GL_TEXTURE_2D);
+
+	glPopMatrix();
+
 }
 
 // Light Ambient
@@ -225,6 +525,17 @@ void lAmbient()
 	glLightfv(GL_LIGHT1, GL_POSITION, lightPosition);
 
 	return;
+}
+
+void fog()
+{
+	GLfloat fogColor[] = {0.9f, 0.9f, 1.0f, 1};	//Sets the color for the fog
+
+	glFogfv(GL_FOG_COLOR, fogColor);			//Modes for the fog are linear, exp and exp2
+	glFogi(GL_FOG_MODE, GL_EXP2);
+	glFogf(GL_FOG_START, 10.0f);
+	glFogf(GL_FOG_END, 40.0f);
+	glFogf(GL_FOG_DENSITY, 0.015f);
 }
 
 
@@ -680,7 +991,6 @@ void mainThornBody()
 		glTranslatef(-0.6875, 0, 0);
 		mainThornFace();
 	glPopMatrix();
-
 }
 
 void createCorePilar(GLfloat top, GLfloat bottom, GLfloat sWall, GLfloat bWall)
@@ -741,6 +1051,74 @@ void createCorePilar(GLfloat top, GLfloat bottom, GLfloat sWall, GLfloat bWall)
 		glVertex3f(-sWall, top,    bWall);
 		glVertex3f( sWall, top,    bWall);
 	glEnd();
+}
+
+// Draw the Circle Wall, the roads to the tower
+void drawIsengard()
+{
+
+	GLUquadricObj *quadratic;
+	quadratic = gluNewQuadric();
+    gluQuadricDrawStyle(quadratic, GLU_FILL);
+	gluQuadricNormals(quadratic, GLU_SMOOTH);
+	gluQuadricTexture(quadratic, GL_TRUE);
+
+	// Draw the wall 
+	glPushMatrix();
+
+		glColor3f(0.9,0.9,0.9);
+		glTranslatef(-isengardRadius, 1.125, 0);
+		glScalef(1,5,1);
+			
+		glPushMatrix();
+			do 
+			{	
+				isengardAngle += 0.1;
+
+				glTranslatef(isengardRadius,0,0);
+				glRotatef(isengardAngle, 0,1,0);
+				glTranslatef(-isengardRadius,0,0);
+				glutSolidCube(0.45); 
+				
+			}
+			while (isengardAngle < 360);
+
+		glPopMatrix();
+
+		
+		isengardAngle = 0;
+		
+	glPopMatrix();
+
+	glPushMatrix();
+		// Draw the roads to the tower
+
+		glColor3f(0.8,0.8,0.8);
+
+		glPushMatrix();	
+			glScalef(isengardRadius*2, 0.025, 0.25);
+			glutSolidCube(1);
+		glPopMatrix();
+
+		glRotatef(45, 0, 1, 0);
+		glPushMatrix();	
+			glScalef(isengardRadius*2, 0.025, 0.25);
+			glutSolidCube(1);
+		glPopMatrix();
+
+		glRotatef(45, 0, 1, 0);
+		glPushMatrix();	
+			glScalef(isengardRadius*2, 0.025, 0.25);
+			glutSolidCube(1);
+		glPopMatrix();
+
+		glRotatef(45, 0, 1, 0);
+		glPushMatrix();	
+			glScalef(isengardRadius*2, 0.025, 0.25);
+			glutSolidCube(1);
+		glPopMatrix();
+
+	glPopMatrix();
 }
 
 // Draw the Tower itself, with the help of external functions
@@ -1163,6 +1541,10 @@ void drawScene(void)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
 
+	// Activate Transparency
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	// Main Push,here the things are drawn
 	glPushMatrix();
 
@@ -1170,12 +1552,19 @@ void drawScene(void)
 		lAmbient();
 		glEnable(GL_COLOR_MATERIAL);
 		glEnable(GL_LIGHT1);
-
+		
 		// Make sure it begins at the origin.
 		glRotatef(rotX, 1.0, 0.0, 0.0);				// Rotate on x
 		glRotatef(rotY, 0.0, 1.0, 0.0);				// Rotate on y
 		glRotatef(rotZ, 0.0, 0.0, 1.0);				// Rotate on z
 		glTranslatef(X, Y, Z);						// Translates the screen left or right,
+
+		// Fog
+		if (enableFog)
+		{
+			fog();
+			glEnable(GL_FOG);
+		}
 
 		// Zoom adjusting
 		glScalef(1 + zoom, 1 + zoom, 1 + zoom);
@@ -1185,9 +1574,20 @@ void drawScene(void)
 			drawLines();
 			drawTower();
 			drawGround();
+			drawIsengard();
 		glPopMatrix();
 
-	 glPopMatrix();
+		// Particle system
+		if (enableSnow)
+		{
+			 glPushMatrix();
+				glTranslatef(0.0, 0.0, -10);
+				glUpdateParticles();
+				glDrawParticles();
+			glPopMatrix();
+		}
+
+		glDisable(GL_FOG);
 
 	// Modeling ends here.
 	//------------------------------------------------------------------
@@ -1205,6 +1605,7 @@ void setup(void)
 	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);	// Set Line Antialiasing
 
 	//load images referent to each place on the texture vector
+	// BMPs
 	Image* image0 = loadBMP("nightsky_down.bmp");
 	_textureId[0] = loadTexture(image0);
 	delete image0;
@@ -1228,6 +1629,22 @@ void setup(void)
 	Image* image5 = loadBMP("nightsky_west.bmp");
 	_textureId[5] = loadTexture(image5);
 	delete image5;
+	
+	// PNG
+  	int width = 1151;
+  	int height = 1151;
+    bool hasAlpha = true;
+    char filename[] = "shadow2.png";
+
+    bool success = loadPngImage(filename, width, height, hasAlpha, &_textureShadow);
+    if (!success) {
+        std::cout << "Unable to load png file" << std::endl;
+        return;
+    }
+    std::cout << "Image loaded " << width << " " << height << " alpha " << hasAlpha << std::endl;
+ 	 	
+    glCreateParticles();
+
 }
 
 // OpenGL window reshape routine.
@@ -1282,6 +1699,16 @@ void processNormalKeys(unsigned char key, int xx, int yy)
 				wireFrame = false;
 		break;
 
+
+		// Changes the view from Fill mode to WireFrame
+		case 'p':
+		case 'P':
+			if (!enableSnow)
+				enableSnow = true;
+			else
+				enableSnow = false;
+		break;
+
 		// Toggles the view of the axis lines
 		case 'l':
 		case 'L':
@@ -1289,6 +1716,15 @@ void processNormalKeys(unsigned char key, int xx, int yy)
 				showAxis = true;
 			else
 				showAxis = false;
+		break;
+
+		// Toggles the view of the axis lines
+		case 'f':
+		case 'F':
+			if (!enableFog)
+				enableFog = true;
+			else
+				enableFog = false;
 		break;
 
 		// Default, resets the translations from starting view
@@ -1332,34 +1768,68 @@ void processNormalKeys(unsigned char key, int xx, int yy)
 	}
 }
 
+// void detectColision()
+// {
+
+// 	// if ()
+// 	// 	collisionX = true;
+
+// 	if (!((z < boxSize - 1) && (z > -(boxSize - 1))))
+// 		collisionZ = true;
+
+// }
+
 void pressSpecialKey(int key, int xx, int yy)
 {
 	switch (key) 
 	{
 		case GLUT_KEY_UP: 
-			deltaMove = 1.0;  
-			lz = 1.0f; 
+			//if (!collisionZ) // Not coliding with the skybox
+			//{
+				//if(x < -2.2 || x > 2.2)
+				//{
+					deltaMove = 1.0;  
+					lz = 1.0f; 
+			//	}
+				// else if ((z < -2.2 || z > 2.2) && (x > -2.2 && x < 2.2))
+				// {
+				// 	deltaMove = 1.0;  
+				// 	lz = 1.0f; 
+				// }
+				
+			//}
 		break;
 
-		case GLUT_KEY_DOWN: 
-			deltaMove = -1.0; 
-			lz = 1.0f; 
+		case GLUT_KEY_DOWN:
+			if (z > -(boxSize - 1))
+			{
+				if((x < -2.2 || x > 2.2) || ((z < -2.2 || z > 2.2) && (x > -2.2 && x < 2.2)))// Not coliding with the Tower
+				{
+					deltaMove = -1.0; 
+					lz = 1.0f;
+				}
+
+			}  
 		break;
 		
-		case GLUT_KEY_RIGHT: 
-			strafe = 1.0; 
+		case GLUT_KEY_LEFT:
+			if (x < boxSize - 1)  
+				strafe = 1.0; 
 		break;
 
-		case GLUT_KEY_LEFT: 
-			strafe = -1.0; 
+		case GLUT_KEY_RIGHT: 
+			if (x > -(boxSize - 1))
+				strafe = -1.0; 
 		break;
 
 		case GLUT_KEY_PAGE_UP: 
-			y++; 
+			if (y < boxSize - 2)
+				y++; 
 		break;
 		
 		case GLUT_KEY_PAGE_DOWN: 
-			y--; 
+			if (y > 0)
+				y--; 
 		break;
 	}
 }
@@ -1404,6 +1874,8 @@ void mouseMove(int x, int z)
 
 	}
 }
+
+
 
 void mouseButton(int button, int state, int x, int z)
 {
